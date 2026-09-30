@@ -22,7 +22,7 @@
 
 ## 3. 安装 MuJoCo
 
-    pip install mujoco numpy
+    pip install mujoco
 
 检查：
 
