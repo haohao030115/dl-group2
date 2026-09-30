@@ -23,6 +23,7 @@
 ## 3. 安装 MuJoCo
 
     pip install mujoco
+    如果报错可以在conda环境下运行：conda install -c conda-forge mujoco
 
 检查：
 
