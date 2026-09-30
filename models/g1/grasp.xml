@@ -1,0 +1,81 @@
+<mujoco model="g1_grasp">
+
+    <compiler angle="radian"/>
+
+<!--    <include file="./g1_with_hands_grasp.xml"/>-->
+    <include file="./scene_with_hands.xml"/>
+    <option gravity="0 0 -9.81"/>
+    <worldbody>
+
+        <!-- 地面 -->
+        <geom
+            name="ground"
+            type="plane"
+            size="5 5 0.1"
+            pos="0 0 0"
+            rgba="0.7 0.7 0.7 1"
+        />
+
+        <!-- 桌子 -->
+        <body name="table" pos="0.60 0 0.55">
+
+            <geom
+                name="table_top"
+                type="box"
+                size="0.45 0.45 0.05"
+                pos="0 0 0"
+                rgba="0.5 0.5 0.5 1"
+            />
+
+            <geom
+                name="table_leg_1"
+                type="box"
+                size="0.05 0.05 0.40"
+                pos="0.35 0.35 -0.40"
+            />
+
+            <geom
+                name="table_leg_2"
+                type="box"
+                size="0.05 0.05 0.40"
+                pos="0.35 -0.35 -0.40"
+            />
+
+            <geom
+                name="table_leg_3"
+                type="box"
+                size="0.05 0.05 0.40"
+                pos="-0.35 0.35 -0.40"
+            />
+
+            <geom
+                name="table_leg_4"
+                type="box"
+                size="0.05 0.05 0.40"
+                pos="-0.35 -0.35 -0.40"
+            />
+
+        </body>
+
+        <!-- Cube -->
+        <body
+            name="cube"
+            pos="0.35 0 0.65"
+        >
+
+            <freejoint/>
+
+            <geom
+                name="cube_geom"
+                type="box"
+                size="0.05 0.05 0.05"
+                mass="0.1"
+                friction="1 0.5 0.5"
+                rgba="0.8 0.2 0.2 1"
+            />
+
+        </body>
+
+    </worldbody>
+
+</mujoco>
