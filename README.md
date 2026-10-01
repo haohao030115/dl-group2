@@ -1,154 +1,151 @@
-# dl-group2
-DASC7606C Track 4 Unitree G1 文本驱动桌面抓取项目
+# dl-group2 — G1 红色方块抓取
 
-**项目目标**
-本项目研究如何使用自然语言指令控制 Unitree G1 人形机器人，在仿真环境中完成桌面方块的伸手、抓取和抬起。
-核心系统需要比较两种不同的运动生成方法——ARDY 与 Kimodo。两种方法必须使用：
-- 相同的 Unitree G1 仿真模型；
-- 相同的桌面、方块、相机和初始条件；
-- 相同的 SONIC 低层控制器；
-- 相同的手部或夹爪控制逻辑；
-- 相同的指令集、成功标准和实验次数；
-- 相同的日志、评估指标和失败分类。
-项目最终目标不是只展示一次成功动画，而是形成一套可以复现、可以公平比较、能够解释成功和失败原因的完整流程：
-自然语言指令
-→ ARDY 或 Kimodo
-→ 方法专属输出适配
-→ 统一 G1 运动表示
-→ SONIC 低层控制
-→ 手部或夹爪控制
-→ 仿真抓取并抬起方块
-→ 日志、指标和失败分析
-注意：课程的 Track 4 指整个课题；下文的 T4 指 GitHub Issue 中的 “ARDY Deployment”，二者不是同一个层级。
+HKU DASC7606C Track 4：在 MuJoCo 中让 Unitree G1 自由站立，完成桌面红色方块的 **reach → grasp → lift → hold**，并保存供 imitation learning / Vision-Action 使用的 reference、实际状态和图像。
 
-**课程硬性要求**
-核心交付范围包括：
-1. 参加 Archon 监督体验，理解并说明 demonstration recording 和 policy inference 的输入、记录数据、模型输出及机器人控制链路。
-2. 在仿真中使用 Unitree G1 和 SONIC。
-3. 接收自然语言文字指令，使 G1 抓取并抬起桌面方块。
-4. 实现并比较至少两种真正不同的运动生成方法。只修改同一方法的 Prompt 不算第二种方法。
-5. 说明运动表示、G1 本体适配、SONIC 接口、手部控制，以及只控制上半身时的下半身稳定方式。
-6. 在统一条件下进行重复实验，报告成功率、响应时间、用户纠正次数和代表性失败。
-7. 提供两种方法的成功和失败视频。
-8. 建立公开 GitHub 仓库，包含代码、配置、安装说明、评估代码和复现步骤。
-9. 提交 5–8 页报告，不含参考文献。
-10. 进行 10 分钟展示，其中必须包含 Demo，随后进行 5 分钟问答。
-11. 提交成员贡献说明、LLM 使用声明，并注明外部代码、模型、数据集和资产来源。
-真机部署、Sim-to-Real、模型训练、语音输入、VLM/VLA、LeRobot 数据集和多物体泛化均属于可选扩展，不得阻塞核心 ARDY/Kimodo 仿真比较。任何真机部署都必须先完成仿真证据、安全检查并获得 TA 明确批准。
+## 当前结果
 
-当前可以并行进行的工作
-**第一阶段 现在即可并行**
-- **T1 仿真环境：**完成物理、碰撞、相机、控制循环、初始站姿和确定性 reset。
-- **T2 场景设计：**先定义物体、目标区域、场景编号、标准位置、成功条件和物理属性；最终可重复运行验收需要与 T1 汇合。
-- **T3 ARDY Baseline：**独立复现官方示例，确认输入、输出、Checkpoint 和运行方式。
-- **T6 Kimodo Baseline：**独立复现官方示例并分析输出表示。
-- **T9 前置工作：**提前定义日志字段、实验矩阵、失败分类、成功检测和统计方法。
-- **T10 前置工作：**持续整理 Archon 流程、系统架构、方法说明、LLM 使用记录和 README 骨架，但暂不写实验结论。
-**第二阶段 两条方法链并行**
-满足各自前置条件后，可同时进行：
-- T4 ARDY Deployment → T5 ARDY Debug
-- T7 Kimodo Deployment → T8 Kimodo Debug
-两条链必须共用同一套环境、接口、SONIC 配置和评估标准，不能分别搭建互不兼容的独立系统。
-**第三阶段 汇合**
-T5 和 T8 都达到稳定验收条件后：
-- 冻结代码、配置、Checkpoint、指令、场景、Seeds 和实验次数；
-- 执行 T9 正式统一实验；
-- 汇总日志、图表、成功和失败视频；
-- 完成 T10 最终报告、展示、Demo 和 README。
+已验证一个中心位置方块的 expert episode：`freebase_wbc_002`，`expert_valid=true`。成功数据保存在当前工作区的 `outputs/expert_episodes/freebase_wbc_002/`。
 
-<img width="892" height="284" alt="image" src="https://github.com/user-attachments/assets/aeae87a9-5fd2-4dd5-ac7c-06bad3d74ce0" />
+| 验证项 | 已保存的成功 SONIC 回放 |
+|---|---|
+| 身体控制 | SONIC，29 DoF |
+| 手部控制 | 独立 joint-space PD，14 DoF |
+| 物理条件 | 重力开启、free base、真实手指接触；无 pelvis weld、elastic band、物体绑定或外力 |
+| 方块最终抬升 | 0.13359 m |
+| 连续稳定 hold | 4.385 s，拇指与食指均有正接触力，方块离开桌面 |
+| 完整性 | 650 帧完整同步，无跌倒 |
+| 采样 | 状态/reference 50 Hz；三路 RGB 10 Hz |
 
-**必须尽早冻结的公共接口**
-建议所有方法统一输出：
-CanonicalMotion
-  joint_names
-  q_ref[T, 29]
-  qdot_ref[T, 29] 或统一速度计算规则
-  timestamps[T]
-  root_position[T]
-  root_orientation[T]
-  optional_hand_command[T]
-  metadata:
-    method
-    instruction
-    seed
-    scene_id
-    object_pose
-    checkpoint
-    config_version
-还必须冻结：
-- 坐标系定义和变换方向；
-- 角度、距离和时间单位；
-- G1 关节名称与顺序；
-- 仿真频率、SONIC 控制频率和轨迹采样率；
-- 缺失关节、裁剪和插值规则；
-- standing/root reference；
-- hand/gripper 命令格式和时序；
-- 场景 ID、对象 ID 和目标区域；
-- reset、随机种子和成功检测；
-- 配置及 Checkpoint 版本。
+同一 reference 连续两次回放成功；代码清理后的独立复测也通过，抬升 0.13423 m、hold 4.38 s。早期机器人与桌面的接触已记录，成功 hold 期间没有机器人或方块接触桌面。当前结果验证的是这一条中心位置轨迹，其他方块位置尚未完成验证。
 
-**设备与资源**
-核心设备和软件包括：
-- Unitree G1 人形机器人；
-- SONIC 低层控制器；
-- MuJoCo 仿真；
-- 当前仓库中的 G1 29-DoF 加 hand 模型；
-- Archon 监督下的真机、遥操作、动捕和策略推理设施；
-- 机器人第一视角和外部相机；
-- HKU CS RTX 4080 GPU Farm；
-- Moore Threads GPU。若实际集成并在最终报告提供 Profiling 和 Benchmark，可获得课程说明中的 5 分 Bonus。
-培训材料提到的真机配置包含约 29 个机身自由度和五指 6-DoF 手，但仿真手型、SONIC 官方手型和 Archon 实际硬件未必一致。开始手部控制前必须确认实际自由度、关节映射和命令接口。
-核心任务不要求自行训练模型或采集训练数据。Bonus 数据若开展，应至少包含同步的图像、机器人状态、动作、关节参考、手部命令、时间戳、语言指令和 Episode Boundary，并进行质量检查和互斥的训练/测试位置划分。
+**Git 只保存源码、场景、配置和文档。** `outputs/` 中的轨迹、校正候选、视频和 RGB 数据被 `.gitignore` 排除，保留在现有工作区；仅 clone 仓库不会获得这些数据。下面的“回放已有 expert”命令要求该 episode 目录已存在。
 
-**实验和日志规范**
-每次运行至少保存：
-run_id
-method
-commit_sha
-config_version
-checkpoint
-instruction
-scene_id
-seed
-robot_initial_pose
-object_initial_pose
-motion_generation_time
-execution_time
-user_correction_count
-grasp_success
-lift_success
-collision
-joint_limit_violation
-tracking_error
-grasp_pose_error
-failure_stage
-failure_reason
-video_or_log_link
-失败阶段建议统一为：
-- Instruction/Parsing
-- Motion Generation
-- Output Adaptation
-- SONIC Tracking
-- Hand/Gripper
-- Collision/Contact
-- Stability
-- Timeout
-- Success Check
-正式实验开始前必须冻结成功标准，例如：
-- 抓到的是指定方块；
-- 方块离开桌面；
-- 抬升高度达到统一阈值；
-- 保持时间达到统一阈值；
-- 未发生禁止碰撞、跌倒或越界；
-- 在统一超时时间内完成。
-T9 Issue 当前以每个位置、每种方法 10 次作为工作示例；最终 Proposal 建议 Pilot 后每个报告条件目标不少于 20 次。正式实验前必须统一这里的“条件”和 Trial 数定义，且两种方法使用相同次数。
+## 方法与控制接口
 
-**Bonus Gate**
-Bonus 只在下列核心 Gate 完成后进入正式集成：
-1. T1/T2 共享仿真和 reset 稳定；
-2. SONIC 可以执行慢速 Scripted Motion；
-3. ARDY 与 Kimodo 均完成至少一次端到端抓取抬起；
-4. 公共接口、成功标准和日志格式冻结；
-5. 核心提交进度不存在明显风险。
-最终英文 Proposal 描述了 Speech-to-Text、可训练视觉语言模型以及分阶段 Sim-to-Real/ACT、条件式 GR00T 和可选 Qwen 规划；当前 GitHub 看板只列出 T11 VLM 和 T12 Generation Network。开始 Bonus 前需要先统一最终范围，并为每个 Bonus 补齐输入、输出、依赖、实验矩阵和验收标准。****
+源轨迹使用全身逆动力学维持站立，手腕 IK 规划抓取动作，独立 hand PD 控制手指。随后根据 SONIC 实测的手腕误差校正 body reference，再进行完整物理回放验证。
+
+```text
+同一条 reference 时间轴（50 Hz）
+├── body_ref_q / body_ref_dq [T,29] → SONIC → 29-DoF body
+└── hand_ref_q / hand_ref_dq [T,14] → 独立 hand PD → 14-DoF hand
+```
+
+SONIC 不控制手指。hand PD 当前使用位置目标，Kp=12、Kd=0.3；hand_ref_dq 保存供后续使用。两者按 SONIC 播放帧索引同步。回放开始前由无支撑全身控制器维持站立，播放期间身体完全交给 SONIC。
+
+body 顺序从官方 deployment 源码读取并交叉校验，body/hand 均通过 joint name 映射到模型。完整 29/14 joint order 和判定条件见 [expert 技术说明](docs/freebase_expert.md)。
+
+## 环境与依赖
+
+当前工作区使用已有环境，无需重新安装：
+
+- 项目：`~/dl-group2`
+- 官方代码、模型和 SONIC 部署程序：`~/GR00T-WholeBodyControl`
+- Python：`~/GR00T-WholeBodyControl/.venv_sim/bin/python`
+- 已验证 GPU 节点：`gpu-4080-413`
+
+`third_party/GR00T-WholeBodyControl` 当前是未初始化的 submodule。程序会只读复用外部官方 checkout，并检查其 commit 与 submodule 锁定版本一致。可通过 `SONIC_REPO` 指定其他官方 checkout。`gear_sonic/` 和 `gear_sonic_deploy/` 是必要的官方依赖目录；当前官方 Git 工作区已恢复干净。
+
+运行 SONIC 时，同一节点应没有其他 domain-0 controller。先进入 GPU 节点并启用环境：
+
+```bash
+ssh gpu-4080-413
+cd ~/dl-group2
+source ~/GR00T-WholeBodyControl/.venv_sim/bin/activate
+export PYTHONPATH="$HOME/GR00T-WholeBodyControl${PYTHONPATH:+:$PYTHONPATH}"
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+export MUJOCO_GL=egl PYOPENGL_PLATFORM=egl
+```
+
+## 回放已有 expert
+
+在上述环境中运行：
+
+```bash
+python scripts/run_sonic_grasp.py \
+  --episode outputs/expert_episodes/freebase_wbc_002 \
+  --candidate cartesian_safe_003 \
+  --band off --startup-support none \
+  --startup-body freebase-wbc --warmup-frames 0 \
+  --run-name "replay_$(date +%Y%m%d_%H%M%S)" \
+  --no-images
+```
+
+每次回放写入独立的 `validation/<run-name>/`，已有同名目录会被拒绝覆盖。`--no-images` 关闭实时渲染，仍完整记录物理状态和接触判定；需要视频时可在回放后从记录的实际状态渲染。
+
+runner 默认 episode 为 `freebase_wbc_002`，默认 candidate 读取该 episode 的 `metadata.json.selected_candidate`。上面的命令显式写出已验证参数，方便复现。
+
+新的成功回放会更新所选 rollout；随后刷新数据集 CSV 并检查一致性：
+
+```bash
+python scripts/export_expert_episode.py \
+  --episode outputs/expert_episodes/freebase_wbc_002
+python scripts/verify_expert_episode.py \
+  --episode outputs/expert_episodes/freebase_wbc_002
+```
+
+验证器检查 joint mapping、帧覆盖、身体/手部同步、物理成功指标及 reference/actual 文件一致性。`expert_valid=false` 时返回 exit code 2；文件可加载本身不代表抓取成功。
+
+## 查看视频与数据
+
+已保存的成功视频在：
+
+```text
+outputs/expert_episodes/freebase_wbc_002/
+└── validation/sonic_safe_confirm_001/vision/
+    ├── task_overview.mp4    # 第三人称全景
+    ├── head_rgb.mp4         # 头部相机
+    ├── wrist_rgb.mp4        # 手腕相机
+    └── images.npz          # RGB、reference 帧索引和时间戳
+```
+
+三路视频约 13 秒、10 FPS，由成功 rollout 的实际 qpos/qvel 渲染。对新的回放，可用以下命令生成图像；将 `YOUR_RUN_NAME` 替换为实际 run-name，已有 vision 目录不会覆盖：
+
+```bash
+python scripts/render_expert_rollout.py \
+  --episode outputs/expert_episodes/freebase_wbc_002 \
+  --rollout validation/YOUR_RUN_NAME
+```
+
+episode 根目录包含统一时间轴上的 reference 和所选成功回放的 actual 数据：
+
+| 数据 | 当前 shape |
+|---|---|
+| body_ref_q、body_ref_dq、body_q、body_dq | `[650,29]` |
+| hand_ref_q、hand_ref_dq、hand_q、hand_dq | `[650,14]` |
+| timestamps | `[650]` |
+| root_pos、root_lin_vel、root_ang_vel、cube_pos | `[650,3]` |
+| root_quat、cube_quat | `[650,4]`，wxyz |
+| 每路 RGB | `[130,240,320,3]` |
+
+joint names 明确记录在 metadata.json 和 joint_names.json。`sonic_reference/` 包含 SONIC 所需的六个 CSV，以及 metadata.txt、info.txt；这些 CSV 与通过物理验证的 candidate 一致。原始源 rollout 和校正历史保存在 episode 内。
+
+## 生成新的源轨迹
+
+选择一个尚不存在的目录，生成默认 13 秒的中心方块源轨迹：
+
+```bash
+python scripts/generate_freebase_expert.py \
+  --episode outputs/expert_episodes/freebase_new
+```
+
+这一步只生成待验证 candidate。后续使用 `refine_freebase_reference.py` 进行需要的 reference 校正，并通过 `run_sonic_grasp.py` 验证；源抓取成功不会自动获得最终 expert 认证。现有成功 episode 的校正过程见 [技术说明](docs/freebase_expert.md)。
+
+## 项目结构
+
+```text
+dl-group2/
+├── configs/grasp_cases.json        # 方块位置配置
+├── scenes/tabletop.xml            # 地面、桌子、红色方块和相机
+├── scripts/                       # 当前 13 个生成、控制、导出与验证模块
+├── docs/
+│   ├── freebase_expert.md          # 方法、joint order、验证与复现细节
+│   ├── code_layout.md             # 各脚本职责和官方依赖说明
+│   ├── cleanup_validation.json    # 清理后的物理回放验证结果
+│   └── project_overview.md        # 课程原始目标与规划
+├── outputs/                       # 本地生成数据与视频，不进入 Git
+│   ├── expert_episodes/freebase_wbc_002/
+│   └── recordings/
+└── third_party/GR00T-WholeBodyControl
+```
+
+旧固定骨盆轨迹和无关实验入口已清理，必要的 IK 与导出函数分别保留在 `grasp_reference.py`、`reference_io.py`。完整清理范围见 [代码结构说明](docs/code_layout.md) 和 [清理记录](docs/code_cleanup.json)。
