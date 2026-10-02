@@ -7,7 +7,6 @@ import mujoco
 import numpy as np
 from scene import load_scene
 from expert_trajectory import write_json
-from episode_schema import NEUTRAL_POSE
 
 
 def audit(episode, rollout):

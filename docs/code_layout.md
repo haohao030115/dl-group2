@@ -1,6 +1,6 @@
 # 当前代码与清理说明
 
-当前流程包含 13 个物理轨迹核心模块和 4 个数据规范/pilot 模块。旧 supported-pelvis 入口、空场景 tracking 实验、旧 reference 导出器、DDS 相机采集入口和安装脚本已删除；原来的共享函数已抽出并验证等价。
+当前流程包含 13 个物理轨迹核心模块和 7 个数据规范/生产/训练读取模块。旧 supported-pelvis 入口、空场景 tracking 实验、旧 reference 导出器、DDS 相机采集入口和安装脚本已删除；原来的共享函数已抽出并验证等价。
 
 | 文件 | 当前用途 |
 |---|---|
@@ -26,6 +26,9 @@
 | `standardize_episode.py` | 只补充旧 episode 元数据，保留原轨迹和图像 |
 | `audit_neutral_pose.py` | 初始碰撞间隙与实测姿态的补充审查 |
 | `run_xy_pilot.py` | 有限次数的小范围位置测试、校正、汇总与训练清单 |
+| `produce_experts.py` | 连续 XY 采样、有限重试、筛选与可续跑数据生产 |
+| `vision_action_dataset.py` | RGB/state/instruction → future body/hand chunk，episode split |
+| `audit_expert_dataset.py` | 整批物理/文件/图像对齐、动作块和 split 检查 |
 
 `configs/neutral_standing.json` 定义左右手通用起点；完整字段与运行说明见
 [数据集规范](dataset_schema.md)。

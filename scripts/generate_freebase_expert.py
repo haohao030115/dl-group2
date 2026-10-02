@@ -154,6 +154,7 @@ def main():
           'elastic_band':False,'no_external_forces':True,'model_equality_count':m.neq,
           'gravity':m.opt.gravity.tolist(),'mapping':{'body':b.describe(),'hand':h.describe()},
           'sonic_config':{'encoder_mode':0},'source_arguments':vars(args)|{'episode':str(args.episode)},
+          'environment_fingerprint':{'cube_friction':m.geom_friction[m.geom('task_cube_geom').id].tolist(),'table_size':m.geom_size[m.geom('task_table_top').id].tolist(),'light_pos':m.light_pos.tolist(),'light_dir':m.light_dir.tolist(),'light_diffuse':m.light_diffuse.tolist(),'camera_pos':m.cam_pos.tolist(),'camera_quat':m.cam_quat.tolist(),'neutral_definition':NEUTRAL_POSE},
           'generator_sha256':sha256(__file__),'shape':{k:list(v.shape) for k,v in states.items()}}
     # Actual source is the measured body reference, with synchronous hand commands.
     arrays={'timestamps':t,'body_ref_q':states['body_q'],'body_ref_dq':states['body_dq'],

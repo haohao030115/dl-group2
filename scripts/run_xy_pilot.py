@@ -167,6 +167,13 @@ def main():
     write_json(base/'pilot_xy_training_manifest.json',dict(schema_version=3,split='pilot_training_eligible',
         excluded_development_archive='pilot_development',episodes=training,
         note='Episode-level eligible pool; no frame-wise train/test split is created.'))
+    failures=[dict(episode_id=row['episode_id'],run=attempt['run'],
+        path=f"{row['episode_id']}/validation/{attempt['run']}",expert_valid=False,
+        failure_reason=attempt['failure_reason']) for row in summary['cases']
+        for attempt in row['attempt_history'] if not attempt['expert_valid']]
+    write_json(base/'pilot_xy_failure_manifest.json',dict(schema_version=3,excluded_from_training=True,
+        failed_final_standard_runs=failures,development_archive='pilot_development',
+        development_attempts=summary['development_attempts']))
     print(json.dumps(summary,indent=2),flush=True)
 
 

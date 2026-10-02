@@ -141,9 +141,20 @@ python scripts/generate_freebase_expert.py \
 默认新轨迹为 16 秒，状态/reference 为 50 Hz、RGB 为 10 Hz。旧 `freebase_wbc_002`
 保留原轨迹，仅补充元数据，并标明其旧初始姿态。新 neutral episode 还会拒绝自接触或
 左臂环境接触。字段定义、同步关系、失败记录和 pilot 命令见
-[数据集规范](docs/dataset_schema.md)。pilot 结果位于
+[数据集规范](docs/dataset_schema.md)。本次五点全部验证成功，四点直接成功，x+2 cm 经四次校正成功；详细指标见
+[五点 pilot 结果](docs/pilot_xy_results.md)。pilot 结果位于
 `outputs/expert_episodes/pilot_xy_summary.json`，通过物理与图像对齐验证的清单位于
 `pilot_xy_training_manifest.json`。失败及开发记录不进入训练清单。
+
+## 连续 XY 批量生产与 Dataset loader
+
+[批量流程说明](docs/batch_dataset_pipeline.md) 提供可续跑的连续位置采样、有限次数物理回放/校正、
+自动筛选和训练 manifest。`produce_experts.py` 的 `--num-episodes` 指候选位置数，失败会保留，
+不会无限补采直到全部成功。schema v3 保持不变。
+
+`vision_action_dataset.py` 按保存的 RGB reference frame 索引读取当前 body29/hand14 状态，
+返回未来 `[H,29]` / `[H,14]` reference 动作块。支持尾部 mask 或丢弃不完整块，按完整 episode
+划分 train/validation；cube GT 和 overview 图像不进入默认模型输入。
 
 ## 项目结构
 
