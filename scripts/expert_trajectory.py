@@ -156,13 +156,25 @@ class PhysicalGraspEvaluator:
         self.table_steps = self.fall_steps = 0
         self.table_bodies = set()
         self.last_contacts = []
+        self.self_contact_steps = self.left_arm_environment_steps = 0
+        self.self_contact_pairs = set()
+        self.body_names = [model.body(i).name or "" for i in range(model.nbody)]
 
     def step(self, data):
         force = np.zeros(6)
         contacts = []
         touching_table = False
+        touching_self = touching_left_environment = False
         for i, contact in enumerate(data.contact):
             b1, b2 = self.model.geom_bodyid[contact.geom1], self.model.geom_bodyid[contact.geom2]
+            n1,n2 = self.body_names[b1],self.body_names[b2]
+            if b1 > 0 and b2 > 0 and contact.dist <= 0:
+                if not n1.startswith('task_') and not n2.startswith('task_'):
+                    touching_self = True
+                    self.self_contact_pairs.add(tuple(sorted((n1,n2))))
+                for robot,environment in [(n1,n2),(n2,n1)]:
+                    if robot.startswith('left_') and any(part in robot for part in ('shoulder','elbow','wrist','hand')) and environment.startswith('task_'):
+                        touching_left_environment = True
             other = b2 if b1 == self.table else b1 if b2 == self.table else -1
             if other > 0 and other != self.cube:
                 touching_table = True
@@ -173,6 +185,8 @@ class PhysicalGraspEvaluator:
                 name = self.model.body(self.model.geom_bodyid[other_geom]).name
                 contacts.append({"body": name, "normal_force_n": float(abs(force[0]))})
         self.table_steps += int(touching_table)
+        self.self_contact_steps += int(touching_self)
+        self.left_arm_environment_steps += int(touching_left_environment)
         lift = float(data.xpos[self.cube, 2] - self.initial_z)
         self.max_lift = max(self.max_lift, lift)
         effective = [c["body"] for c in contacts if c["normal_force_n"] > 1e-4]
@@ -186,12 +200,14 @@ class PhysicalGraspEvaluator:
         self.fall_steps += int(data.xpos[self.model.body("pelvis").id, 2] < .2)
         self.last_contacts = contacts
         return {"lift_m": lift, "opposing_contact": thumb and finger, "cube_table_contact": cube_on_table,
-                "valid_hold": valid, "robot_table_contact": touching_table, "hold_seconds": self.hold}
+                "valid_hold": valid, "robot_self_contact": touching_self, "left_arm_environment_contact": touching_left_environment, "robot_table_contact": touching_table, "hold_seconds": self.hold}
 
     def report(self, data):
         return {"physical_grasp_success": self.hold >= 2., "max_lift_m": self.max_lift,
                 "final_lift_m": float(data.xpos[self.cube, 2] - self.initial_z),
                 "max_continuous_hold_seconds": self.max_hold, "final_continuous_hold_seconds": self.hold,
                 "robot_table_contact_steps": self.table_steps, "robot_table_contact_bodies": sorted(self.table_bodies),
+                "robot_self_contact_steps": self.self_contact_steps, "robot_self_contact_pairs": sorted(self.self_contact_pairs),
+                "left_arm_environment_contact_steps": self.left_arm_environment_steps,
                 "fall_steps": self.fall_steps, "final_cube_contacts": self.last_contacts,
                 "criterion": CRITERION, "cube_attached": False, "cube_teleported_during_rollout": False}

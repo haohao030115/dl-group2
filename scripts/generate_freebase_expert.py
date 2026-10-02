@@ -16,10 +16,11 @@ from grasp_reference import GraspReference
 from expert_trajectory import JointMap,orders,robot_state,PhysicalGraspEvaluator,write_json,save_arrays,sha256
 from reference_io import export_reference
 from reference_io import write_csv
+from episode_schema import dataset_fields, neutral_arms, NEUTRAL_POSE
 
 
 class WholeBody:
-    def __init__(self,m,d,body,hand):
+    def __init__(self,m,d,body,hand,neutral=False):
         self.m,self.d,self.body,self.hand=m,d,body,hand
         root=m.joint('floating_base_joint'); self.rva=int(root.dofadr[0])
         self.v=np.r_[np.arange(self.rva,self.rva+6),body.va]
@@ -28,7 +29,7 @@ class WholeBody:
         self.footpos=d.xpos[self.feet].copy();self.footrot=d.xmat[self.feet].reshape(2,3,3).copy()
         self.pelvis=m.body('pelvis').id
         self.height=d.xpos[self.pelvis,2]
-        self.com_target=np.array([.025,0.])
+        self.com_target=d.subtree_com[self.pelvis,:2].copy() if neutral else np.array([.025,0.])
         self.prev_j=None
         self.mass=np.zeros((m.nv,m.nv))
         self.g=GraspReference(m,d)
@@ -38,7 +39,7 @@ class WholeBody:
     def control(self,t):
         rootqa=int(self.m.joint('floating_base_joint').qposadr[0])
         self.g.plan.qpos[rootqa:rootqa+7]=self.d.qpos[rootqa:rootqa+7]
-        self.g.control(max(0,t-1))
+        if t >= 1:self.g.control(t-1)
 
     def apply(self):
         m,d,b=self.m,self.d,self.body
@@ -87,22 +88,30 @@ class WholeBody:
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--episode',type=Path,required=True)
-    p.add_argument('--duration',type=float,default=13)
-    p.add_argument('--knee',type=float,default=.3)
-    p.add_argument('--com-x',type=float,default=.025)
+    p.add_argument('--duration',type=float,default=16)
+    p.add_argument('--knee',type=float,default=NEUTRAL_POSE['knee'])
+    p.add_argument('--com-x',type=float)
     p.add_argument('--cube-x',type=float)
+    p.add_argument('--cube-y',type=float)
+    p.add_argument('--case-id',default='center')
+    p.add_argument('--random-seed',type=int,default=0)
     p.add_argument('--lift',type=float,default=.18)
     args=p.parse_args()
+    if args.knee != NEUTRAL_POSE['knee']:p.error('New episodes require the shared neutral knee configuration')
     if args.episode.exists():p.error('Episode already exists')
     m,d=load_scene(supported=False)
     config=read_cases();case=dict(config['cases'][case_index(config,'center')])
     if args.cube_x is not None:case['block_xy']=[args.cube_x,case['block_xy'][1]]
+    if args.cube_y is not None:case['block_xy']=[case['block_xy'][0],args.cube_y]
+    case['id']=args.case_id
     reset_case(m,d,case)
+    fields=dataset_fields(m,d,case,args.episode.name,args.random_seed)
     bn,hn,mn=orders();b,h=JointMap(m,bn,29),JointMap(m,hn,14)
     # Legal one-time starting pose. All subsequent state changes use mj_step.
     for side in ('left','right'):
         for part,val in [('hip_pitch',-args.knee/2),('knee',args.knee),('ankle_pitch',-args.knee/2)]:
             d.qpos[m.joint(f'{side}_{part}_joint').qposadr[0]]=val
+    arm_pose=neutral_arms(m,d)
     mujoco.mj_forward(m,d)
     feet=[i for i in range(m.ngeom) if m.body(m.geom_bodyid[i]).name in ('left_ankle_roll_link','right_ankle_roll_link') and m.geom_contype[i]]
     rootqa=int(m.joint('floating_base_joint').qposadr[0])
@@ -110,7 +119,9 @@ def main():
     mujoco.mj_forward(m,d)
     assert m.neq==0 and m.jnt_type[m.joint('floating_base_joint').id]==mujoco.mjtJoint.mjJNT_FREE
     assert np.allclose(m.opt.gravity,[0,0,-9.81])
-    w=WholeBody(m,d,b,h);w.com_target[0]=args.com_x;w.g.lift_height=args.lift
+    initial_wrists={side:d.xpos[m.body(side+'_wrist_yaw_link').id].tolist() for side in ('left','right')}
+    w=WholeBody(m,d,b,h,neutral=True);w.g.natural_start=True;w.g.lift_height=args.lift
+    if args.com_x is not None:w.com_target[0]=args.com_x
     ev=PhysicalGraspEvaluator(m,d)
     args.episode.mkdir(parents=True)
     states={};refs=[];href=[];times=[];contacts=[];wrenches=[];failure=None
@@ -133,8 +144,8 @@ def main():
     except Exception as e:failure=f'{type(e).__name__}: {e}'
     t=np.array(times);states={k:np.array(v) for k,v in states.items()}
     report=ev.report(d);complete=failure is None and len(t)==round(args.duration*50)
-    success=complete and report['physical_grasp_success'] and not report['fall_steps']
-    meta={'schema_version':2,'body_joint_order':bn,'hand_joint_order':hn,'motor_command_joint_order':mn,
+    success=complete and report['physical_grasp_success'] and not report['fall_steps'] and not report['robot_self_contact_steps'] and not report['left_arm_environment_contact_steps']
+    meta={**fields,'initial_pose':{'name':NEUTRAL_POSE['name'],'definition':NEUTRAL_POSE,'neutral_standard_compliant':True,'arm_joint_positions':arm_pose,'wrist_positions':initial_wrists},'body_joint_order':bn,'hand_joint_order':hn,'motor_command_joint_order':mn,
           'sampling_rate_hz':50,'quaternion_order':'wxyz','velocity_frame':'world','case':case,
           'source_controller':'contact-constrained whole-body inverse dynamics + wrist IK + independent hand PD',
           'source_success':bool(success),'pelvis_supported_during_source_generation':False,
@@ -164,6 +175,7 @@ def main():
     for name in ('info.txt','metadata.txt'):
         (args.episode/name).write_text((args.episode/'sonic_reference'/name).read_text())
     write_json(args.episode/'metadata.json',meta)
+    write_json(args.episode/'joint_names.json',{'body':bn,'hand':hn})
     print(json.dumps(report,indent=2),flush=True)
     if not success:raise SystemExit(2)
 

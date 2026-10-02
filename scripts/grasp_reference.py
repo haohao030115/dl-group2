@@ -5,6 +5,7 @@ is owned by the whole-body controller and independent hand controller.
 """
 import numpy as np
 import mujoco
+from scipy.spatial.transform import Rotation, Slerp
 
 
 class GraspReference:
@@ -29,6 +30,8 @@ class GraspReference:
         self.target = self.origin - self.rotation @ np.array([.135,.065,0])
         self.thumb_pre=0.
         self.stage = ''
+        self.natural_start = False
+        self.start_rotation = data.xmat[self.wrist].reshape(3,3).copy()
 
     def ik(self, target):
         m,d = self.m,self.plan
@@ -66,6 +69,25 @@ class GraspReference:
         def smooth(a,b,u):
             u=np.clip(u,0,1);return a+(b-a)*(u*u*(3-2*u))
         above = self.target + [0,0,.13]
+        if self.natural_start:
+            final_rotation=np.array([[1,0,0],[0,0,1],[0,-1,0]],float)
+            if t < 5:
+                # Lift outside the front edge before moving over the table.
+                clearance=np.array([.06,self.start[1]-.03,above[2]+.04])
+                if t < 3:
+                    u=np.clip(t/3,0,1);u=u*u*(3-2*u)
+                    self.rotation=Slerp([0,1],Rotation.from_matrix([self.start_rotation,final_rotation]))([u]).as_matrix()[0]
+                    target=smooth(self.start,clearance,t/3)
+                    self.stage='raise_outside_table'
+                else:
+                    self.rotation=final_rotation
+                    target=smooth(clearance,above,(t-3)/2)
+                    self.stage='cross_table_edge'
+                self.ik(target)
+                for address in self.hand.values():self.plan.qpos[address]=0
+                return
+            t-=3
+
         if t<2:
             stage='reach'; target=smooth(self.start,above,t/2); close=0
         elif t<4:

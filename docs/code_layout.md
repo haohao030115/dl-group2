@@ -1,6 +1,6 @@
 # 当前代码与清理说明
 
-当前流程只保留 13 个 Python 文件。旧 supported-pelvis 入口、空场景 tracking 实验、旧 reference 导出器、DDS 相机采集入口和安装脚本已删除；原来的共享函数已抽出并验证等价。
+当前流程包含 13 个物理轨迹核心模块和 4 个数据规范/pilot 模块。旧 supported-pelvis 入口、空场景 tracking 实验、旧 reference 导出器、DDS 相机采集入口和安装脚本已删除；原来的共享函数已抽出并验证等价。
 
 | 文件 | 当前用途 |
 |---|---|
@@ -17,6 +17,18 @@
 | `scene.py` | 组合官方 G1 模型与项目桌面场景 |
 | `cases.py` | 读取 case、初始化方块位置 |
 | `project_paths.py` | 项目路径、当前默认 episode、只读官方模型路径 |
+
+新增的数据集模块：
+
+| 文件 | 用途 |
+|---|---|
+| `episode_schema.py` | 统一 metadata、通用 neutral 双臂配置、RGB 对齐校验 |
+| `standardize_episode.py` | 只补充旧 episode 元数据，保留原轨迹和图像 |
+| `audit_neutral_pose.py` | 初始碰撞间隙与实测姿态的补充审查 |
+| `run_xy_pilot.py` | 有限次数的小范围位置测试、校正、汇总与训练清单 |
+
+`configs/neutral_standing.json` 定义左右手通用起点；完整字段与运行说明见
+[数据集规范](dataset_schema.md)。
 
 `grasp.py`、`pick_red_cube.py`、`generate_sonic_reference.py`、`generate_sonic_reference_actual.py`、`generate_expert_candidates.py` 已移除。当前代码不再通过这些旧入口间接导入其他历史控制器。映射解析从 `audit_sonic_reference.py` 移入 `expert_trajectory.py`，审查功能由统一验证器负责。
 

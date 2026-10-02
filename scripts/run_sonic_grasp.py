@@ -183,7 +183,7 @@ class TabletopDDS:
         self.startup_wbc = None
         if args.startup_body == "freebase-wbc":
             from generate_freebase_expert import WholeBody
-            self.startup_wbc = WholeBody(m, d, self.body, self.hand)
+            self.startup_wbc = WholeBody(m, d, self.body, self.hand, neutral=metadata.get("initial_pose", {}).get("name") == "neutral_standing_v1")
         self.bridge = UnitreeSdk2Bridge(config)
         self.band = ElasticBand()
         self.band.kd_ang = args.band_angular_damping
@@ -407,7 +407,7 @@ def main():
     save_arrays(out,actual)
     if images:
         np.savez_compressed(out / "images.npz",**{k:np.asarray(v) for k,v in images.items()},
-                            reference_frame=np.asarray(image_frames),sim_timestamps=np.asarray(image_sim_times))
+                            reference_frame=np.asarray(image_frames),timestamps=arrays["timestamps"][np.asarray(image_frames,dtype=int)],sim_timestamps=np.asarray(image_sim_times))
     write_json(out / "contacts.json",contact_rows)
     report = runtime.evaluator.report(runtime.data)
     coverage = frame_ids == list(range(len(arrays["timestamps"])))
@@ -443,6 +443,9 @@ def main():
     if not report["physical_grasp_success"]: reasons.append("cube_lift_opposing_contact_and_2s_hold_not_met")
     if report["fall_steps"]: reasons.append("robot_fell")
     if not metadata["source_success"]: reasons.append("source_grasp_not_successful")
+    if metadata.get('initial_pose', {}).get('name') == 'neutral_standing_v1':
+        if report['robot_self_contact_steps']:reasons.append('neutral_rollout_robot_self_contact')
+        if report['left_arm_environment_contact_steps']:reasons.append('neutral_left_arm_environment_contact')
     expert_valid = not reasons
     report.update(expert_valid=expert_valid,failure_reason=reasons,episode_completed=completed,
                   recorded_frames=len(frame_ids),expected_frames=len(arrays["timestamps"]),frame_coverage_complete=coverage,

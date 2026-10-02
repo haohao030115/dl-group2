@@ -14,6 +14,7 @@ import numpy as np
 
 from expert_trajectory import load_reference, write_json
 from project_paths import DEFAULT_EPISODE
+from episode_schema import validate_dataset_metadata, validate_images
 
 
 def select_saved_run(episode, name):
@@ -95,6 +96,12 @@ def verify(episode, check_csv=True):
                          "fall_steps", "robot_table_contact_steps", "hand_synchronized",
                          "expert_valid", "failure_reason")}})
     parent = json.loads((episode / "metadata.json").read_text())
+    if parent.get('schema_version') == 3:
+        validate_dataset_metadata(parent)
+        initial_cube=np.load(episode/'source/cube_pos.npy')[0]
+        initial_quat=np.load(episode/'source/cube_quat.npy')[0]
+        assert np.allclose(parent['task_config']['cube_initial_position'], initial_cube, atol=1e-12)
+        assert np.allclose(parent['task_config']['cube_initial_quaternion_wxyz'], initial_quat, atol=1e-12)
     source_physical = source.get("force_checked", source)
     source_success = source.get("source_success", source.get("original", {}).get("success", False))
     assert parent["source_success"] == bool(source_success and source_physical["physical_grasp_success"])
@@ -112,8 +119,15 @@ def verify(episode, check_csv=True):
             assert np.array_equal(a,original), key
         assert np.array_equal(np.load(episode/"actual_timestamps.npy"),
                               np.load(episode/"validation"/selected/"timestamps.npy"))
+    image_audit=None
+    if check_csv and selected_row and parent.get('schema_version') == 3 and (episode/'csv_manifest.json').exists():
+        image_audit=validate_images(episode/'validation'/selected, root_refs['timestamps'])
+        if parent.get('expert_valid') and parent.get('initial_pose',{}).get('name')=='neutral_standing_v1':
+            selected_report=json.loads((episode/'validation'/selected/'report.json').read_text())
+            assert selected_report['robot_self_contact_steps']==0
+            assert selected_report['left_arm_environment_contact_steps']==0
     delta = (candidates["target"]["body_ref_q"]-candidates["actual"]["body_ref_q"]) if "target" in candidates else None
-    if check_csv and parent.get("expert_valid") and (episode / "csv_manifest.json").exists():
+    if check_csv and selected_row and (episode / "csv_manifest.json").exists():
         # Check exported dataset states as well as binary trial arrays.
         for key in ("body_ref_q", "body_ref_dq", "hand_ref_q", "hand_ref_dq", "body_q", "body_dq", "hand_q", "hand_dq", "root_pos", "root_quat", "root_lin_vel", "root_ang_vel", "cube_pos", "cube_quat"):
             csv = np.loadtxt(episode / f"{key}.csv", delimiter=",", skiprows=1, ndmin=2)
@@ -123,7 +137,7 @@ def verify(episode, check_csv=True):
         for filename in ("joint_pos.csv", "joint_vel.csv", "body_pos.csv", "body_quat.csv", "body_lin_vel.csv", "body_ang_vel.csv"):
             assert (episode / "sonic_reference" / filename).read_bytes() == (candidate_path / filename).read_bytes(), filename
     summary = {"files_valid": True, "expert_valid": parent["expert_valid"],
-               "source_success": parent["source_success"],
+               "source_success": parent["source_success"], "image_alignment": image_audit,
                "source_physical_report": source_physical,
                "target_vs_actual_body_rmse_rad": float(np.sqrt(np.mean(delta**2))) if delta is not None else None,
                "selected_validation_run": selected, "runs": rows}

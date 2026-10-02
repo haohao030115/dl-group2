@@ -74,7 +74,7 @@ python scripts/run_sonic_grasp.py \
 
 runner 默认 episode 为 `freebase_wbc_002`，默认 candidate 读取该 episode 的 `metadata.json.selected_candidate`。上面的命令显式写出已验证参数，方便复现。
 
-新的成功回放会更新所选 rollout；随后刷新数据集 CSV 并检查一致性：
+新的成功回放会更新所选 rollout。先按下节命令为该 run 保存 RGB；再刷新数据集 CSV 并检查一致性（schema v3 导出要求图像对齐检查通过）：
 
 ```bash
 python scripts/export_expert_episode.py \
@@ -121,7 +121,7 @@ joint names 明确记录在 metadata.json 和 joint_names.json。`sonic_referenc
 
 ## 生成新的源轨迹
 
-选择一个尚不存在的目录，生成默认 13 秒的中心方块源轨迹：
+选择一个尚不存在的目录，生成默认 16 秒、neutral 起点的中心方块源轨迹：
 
 ```bash
 python scripts/generate_freebase_expert.py \
@@ -130,13 +130,28 @@ python scripts/generate_freebase_expert.py \
 
 这一步只生成待验证 candidate。后续使用 `refine_freebase_reference.py` 进行需要的 reference 校正，并通过 `run_sonic_grasp.py` 验证；源抓取成功不会自动获得最终 expert 认证。现有成功 episode 的校正过程见 [技术说明](docs/freebase_expert.md)。
 
+
+## 标准化数据集与 neutral 起点
+
+新 episode 使用 schema v3，统一英文 instruction、相机角色和从 MuJoCo 初始化状态读取的
+`task_config`。标准初始姿态由 [neutral_standing.json](configs/neutral_standing.json) 定义：
+左右臂对称下垂、肘部轻微弯曲、双手张开，作为左右手或双手任务的共同起点。
+当前右手执行抓取，左臂保持 neutral，完整保留 body29 和 hand14 的 reference/actual。
+
+默认新轨迹为 16 秒，状态/reference 为 50 Hz、RGB 为 10 Hz。旧 `freebase_wbc_002`
+保留原轨迹，仅补充元数据，并标明其旧初始姿态。新 neutral episode 还会拒绝自接触或
+左臂环境接触。字段定义、同步关系、失败记录和 pilot 命令见
+[数据集规范](docs/dataset_schema.md)。pilot 结果位于
+`outputs/expert_episodes/pilot_xy_summary.json`，通过物理与图像对齐验证的清单位于
+`pilot_xy_training_manifest.json`。失败及开发记录不进入训练清单。
+
 ## 项目结构
 
 ```text
 dl-group2/
 ├── configs/grasp_cases.json        # 方块位置配置
 ├── scenes/tabletop.xml            # 地面、桌子、红色方块和相机
-├── scripts/                       # 当前 13 个生成、控制、导出与验证模块
+├── scripts/                       # 生成、控制、数据规范、pilot 与验证模块
 ├── docs/
 │   ├── freebase_expert.md          # 方法、joint order、验证与复现细节
 │   ├── code_layout.md             # 各脚本职责和官方依赖说明
